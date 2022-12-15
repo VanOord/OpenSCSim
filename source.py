@@ -102,7 +102,7 @@ def combine_cashflow_dataframes(dfs):
     df_combined['capex'] = 0
     df_combined['opex'] = 0
     df_combined['revenue'] = 0
-    df_combined.index = years
+    df_combined.index = new_years
     df_combined.index.name = 'years'
 
     for df in dfs:
@@ -149,7 +149,8 @@ def calculate_npv(df, baseyear=2000, interest=0.07):
     return df
 
 
-def create_npv_plot(df, title=r'CAPEX, OPEX and Revenues and NPV', fname=r'test.png', x1=0, y1=0, x2=0, y2=0):
+def create_npv_plot(df, title=r'CAPEX, OPEX and Revenues and NPV', fname=r'test.png', x1=0, y1=0, x2=0, y2=0,
+                    cash_flow_lims=[-1000, 1000], npv_lims=[-1000, 1000]):
     """This method creates a basic plot"""
 
     # assert that dataframe adheres to prescribed standards
@@ -190,7 +191,7 @@ def create_npv_plot(df, title=r'CAPEX, OPEX and Revenues and NPV', fname=r'test.
 
     ax1.grid(which='major', axis='both')
     ax1.set_xlim([df.years.min(), df.years.max() + 1])
-    ax1.set_ylim([-10, 10])
+    ax1.set_ylim(cash_flow_lims)
 
     # ----
 
@@ -202,7 +203,7 @@ def create_npv_plot(df, title=r'CAPEX, OPEX and Revenues and NPV', fname=r'test.
 
     ax2.set_ylabel('NPV ($10^6$ Euro)', fontsize=fontsize)  # we already handled the x-label with ax1
 
-    ax2.set_ylim([-10, 10])  # NB: you want to take care that the y=0 of ax1 and ax2 align to avoid confusion
+    ax2.set_ylim(npv_lims)  # NB: you want to take care that the y=0 of ax1 and ax2 align to avoid confusion
 
     # ----
 
@@ -223,14 +224,24 @@ def Inputs_2_cashflow(Inputs,
     Method returns cashflow dataframe
     """
 
+    Number_of_units = Inputs[
+        (Inputs['Sub-system'] == subsystem) &
+        (Inputs['Element'] == element) &
+        (Inputs['Component'] == component) &
+        (Inputs['Category'] == 'General') &
+        (Inputs['Description'] == 'Number of units')].Number.item()
+
+    if Debug:
+        display('Construction items {}: {} units'.format(component, Number_of_units))
+
     Capex_component = Inputs[
         (Inputs['Sub-system'] == subsystem) &
         (Inputs['Element'] == element) &
         (Inputs['Component'] == component) &
-        (Inputs['Category'].isin(cashflow_categories))].Number.sum()
+        (Inputs['Category'].isin(cashflow_categories))].Number.sum() * Number_of_units
 
     if Debug:
-        display('Capex_component {}: {} euro/unit'.format(component, Capex_component))
+        display('CAPEX component {}: {} eu/unit'.format(component, Capex_component))
 
     Construction_duration = Inputs[
         (Inputs['Sub-system'] == subsystem) &
