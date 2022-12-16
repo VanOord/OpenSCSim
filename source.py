@@ -241,7 +241,7 @@ def Inputs_2_cashflow(Inputs,
         (Inputs['Category'].isin(cashflow_categories))].Number.sum() * Number_of_units
 
     if Debug:
-        display('CAPEX component {}: {} eu/unit'.format(component, Capex_component))
+        display('CAPEX component {}: {} eu for {} unit(s)'.format(component, Capex_component, Number_of_units))
 
     Construction_duration = Inputs[
         (Inputs['Sub-system'] == subsystem) &
@@ -270,7 +270,7 @@ def Inputs_2_cashflow(Inputs,
                          (Inputs['Category'] == 'Opex')].Number.item() / 100 * Capex_component
 
     if Debug:
-        display('Opex {}: {} euro/unit'.format(component, Opex_component))
+        display('OPEX component {}: {} eu for {} unit(s)'.format(component, Opex_component, Number_of_units))
 
     Revenue_component = 0
 
