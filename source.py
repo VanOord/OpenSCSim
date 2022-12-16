@@ -216,7 +216,7 @@ def Inputs_2_cashflow(Inputs,
                       subsystem='Wind energy source & Transport',
                       element='Offshore wind park',
                       component='Foundations',
-                      cashflow_categories=['Development and Project Management', 'Procurement', 'Installation'],
+                      cashflow_categories=['Development and Project Management', 'Procurement', 'Installation and Commissioning '],
                       Debug=False):
     """
     Assuming columns Sub-system, Element and Component allways exist
