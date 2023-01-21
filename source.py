@@ -216,58 +216,216 @@ def Inputs_2_cashflow(Inputs,
                       subsystem='Wind energy source & Transport',
                       element='Offshore wind park',
                       component='Foundations',
-                      cashflow_categories=['Development and Project Management', 'Procurement', 'Installation and Commissioning '],
+                      capex_categories=['Development and Project Management', 'Procurement',
+                                        'Installation and Commissioning'],
+                      opex_categories=['Yearly Variable Costs Rate', 'Insurance Rate'],
                       Debug=False):
     """
     Assuming columns Sub-system, Element and Component allways exist
 
     Method returns cashflow dataframe
     """
-
-    Number_of_units = Inputs[
-        (Inputs['Sub-system'] == subsystem) &
-        (Inputs['Element'] == element) &
-        (Inputs['Component'] == component) &
-        (Inputs['Category'] == 'General') &
-        (Inputs['Description'] == 'Number of units')].Number.item()
+    # Number of units
+    try:
+        Number_of_units = Inputs[
+            (Inputs['Sub-system'] == subsystem) &
+            (Inputs['Element'] == element) &
+            (Inputs['Component'] == component) &
+            (Inputs['Category'] == 'General') &
+            (Inputs['Description'] == 'Number of units')].Number.item()
+    except:
+        Number_of_units = 1
 
     if Debug:
         display('Construction items {}: {} units'.format(component, Number_of_units))
 
-    Capex_component = Inputs[
-        (Inputs['Sub-system'] == subsystem) &
-        (Inputs['Element'] == element) &
-        (Inputs['Component'] == component) &
-        (Inputs['Category'].isin(cashflow_categories))].Number.sum() * Number_of_units
+    # CAPEX components
+    # NB: we may want to separate these later (if we want to show which components are most influential)
+    try:
+        Capex_component = Inputs[
+                              (Inputs['Sub-system'] == subsystem) &
+                              (Inputs['Element'] == element) &
+                              (Inputs['Component'] == component) &
+                              (Inputs['Description'].str.contains(
+                                  '|'.join(capex_categories)))].Number.sum() * Number_of_units
+
+    except:
+        Capex_component = 1_500_000 * Number_of_units
 
     if Debug:
         display('CAPEX component {}: {} eu for {} unit(s)'.format(component, Capex_component, Number_of_units))
 
-    Construction_duration = Inputs[
-        (Inputs['Sub-system'] == subsystem) &
-        (Inputs['Element'] == element) &
-        (Inputs['Component'] == component) &
-        (Inputs['Category'] == 'Capex') &
-        (Inputs['Description'] == 'Construction duration')].Number.item()
+    # Construction duration (must be an integer)
+    try:
+        Construction_duration = int(Inputs[
+                                        (Inputs['Sub-system'] == subsystem) &
+                                        (Inputs['Element'] == element) &
+                                        (Inputs['Component'] == component) &
+                                        (Inputs['Category'] == 'Capex') &
+                                        (Inputs['Description'] == 'Construction duration')].Number.item())
+    except:
+        Construction_duration = 3
+
     if Debug:
         display('Construction duration {}: {} years'.format(component, Construction_duration))
 
-    Construction_allocation = Inputs[
-        (Inputs['Sub-system'] == subsystem) &
-        (Inputs['Element'] == element) &
-        (Inputs['Component'] == component) &
-        (Inputs['Category'] == 'Capex') &
-        (Inputs['Description'] == 'Capex allocation')].Number.item().split(",")
-    Construction_allocation = [float(x) for x in Construction_allocation]
+    # Share of Investments
+    try:
+        # isolate the rows that contain 'Share of Investments in Year' and remove the string to only get the year numbers
+        years = list(Inputs[
+                         (Inputs['Sub-system'] == subsystem) &
+                         (Inputs['Element'] == element) &
+                         (Inputs['Component'] == component) &
+                         (Inputs['Description'].str.contains('Share of Investments in Year'))].Description.str.replace(
+            'Share of Investments in Year ', ''))
+
+        # transform the year numbers from string to in and sort them to be certain of the order
+        years = [int(x) for x in years]
+        years.sort()
+
+        # now extract the allocations, since years are sorted we know for sure now that the allocations are in the right order
+        Construction_allocation = []
+        for year in years:
+            Construction_allocation.append(Inputs[
+                                               (Inputs['Sub-system'] == subsystem) &
+                                               (Inputs['Element'] == element) &
+                                               (Inputs['Component'] == component) &
+                                               (Inputs['Description'].str.contains(
+                                                   'Share of Investments in Year ' + str(year)))
+                                               ].Number.item())
+    except:
+        Construction_allocation = [0.4, 0.3, 0.3]
 
     if Debug:
         display('Construction allocation {}: {} per year'.format(component, Construction_allocation))
 
-    Opex_component = Inputs[
-                         (Inputs['Sub-system'] == subsystem) &
-                         (Inputs['Element'] == element) &
-                         (Inputs['Component'] == component) &
-                         (Inputs['Category'] == 'Opex')].Number.item() / 100 * Capex_component
+    # Economic Lifetime (must be an integer)
+    try:
+        lifecycle = int(Inputs[
+                            (Inputs['Sub-system'] == subsystem) &
+                            (Inputs['Element'] == element) &
+                            (Inputs['Component'] == component) &
+                            (Inputs['Description'] == 'Economic Lifetime')].Number.item())
+
+    except:
+        lifecycle = 50
+
+    if Debug:
+        display('Economic Lifetime {}: {} years'.format(component, lifecycle))
+
+    # Depreciation Flag
+    try:
+        depreciation_flag = Inputs[
+            (Inputs['Sub-system'] == subsystem) &
+            (Inputs['Element'] == element) &
+            (Inputs['Component'] == component) &
+            (Inputs['Description'] == 'Depreciation Flag')].Number.item()
+
+    except:
+        depreciation_flag = 1
+
+    if Debug:
+        display('Depreciation Flag {}: {}'.format(component, depreciation_flag))
+
+    # Yearly Variable Costs Flag
+    try:
+        yearly_variable_costs_flag = Inputs[
+            (Inputs['Sub-system'] == subsystem) &
+            (Inputs['Element'] == element) &
+            (Inputs['Component'] == component) &
+            (Inputs['Description'] == 'Yearly Variable Costs Flag')].Number.item()
+
+    except:
+        yearly_variable_costs_flag = 1
+
+    if Debug:
+        display('Yearly Variable Costs Flag {}: {}'.format(component, yearly_variable_costs_flag))
+
+    # Yearly Variable Costs Rate
+    try:
+        yearly_variable_cost_rate = Inputs[
+            (Inputs['Sub-system'] == subsystem) &
+            (Inputs['Element'] == element) &
+            (Inputs['Component'] == component) &
+            (Inputs['Description'] == 'Yearly Variable Costs Rate')].Number.item()
+
+    except:
+        yearly_variable_cost_rate = 1
+
+    if Debug:
+        display('Yearly Variable Costs Rate {}: {}'.format(component, yearly_variable_cost_rate))
+
+    # Insurance Flag
+    try:
+        insurance_flag = Inputs[
+            (Inputs['Sub-system'] == subsystem) &
+            (Inputs['Element'] == element) &
+            (Inputs['Component'] == component) &
+            (Inputs['Description'] == 'Insurance Flag')].Number.item()
+
+    except:
+        insurance_flag = 1
+
+    if Debug:
+        display('Insurance Flag {}: {}'.format(component, insurance_flag))
+
+    # Insurance Rate
+    try:
+
+        insurance_rate = Inputs[
+            (Inputs['Sub-system'] == subsystem) &
+            (Inputs['Element'] == element) &
+            (Inputs['Component'] == component) &
+            (Inputs['Description'] == 'Insurance Rate')].Number.item()
+
+    except:
+        insurance_rate = 1
+
+    if Debug:
+        display('Insurance Rate {}: {}'.format(component, insurance_rate))
+
+    # Decommissioning
+    try:
+        decommissioning = Inputs[
+            (Inputs['Sub-system'] == subsystem) &
+            (Inputs['Element'] == element) &
+            (Inputs['Component'] == component) &
+            (Inputs['Description'].str.contains('decommissioning'))].Number.item()
+
+    except:
+        decommissioning = 1
+
+    if Debug:
+        display('Decommissioning {}: {}'.format(component, decommissioning))
+
+    # Residual Value
+    try:
+        residual_value = Inputs[
+            (Inputs['Sub-system'] == subsystem) &
+            (Inputs['Element'] == element) &
+            (Inputs['Component'] == component) &
+            (Inputs['Description'].str.contains('residual value'))].Number.item()
+
+    except:
+        residual_value = 0.01
+
+    if Debug:
+        display('Residual Value {}: {}'.format(component, residual_value))
+
+    # -----------------------------------------------
+
+    # OPEX components
+    # NB: we may want to separate these later (if we want to show which components are most influential)
+    try:
+        Opex_component = Inputs[
+                             (Inputs['Sub-system'] == subsystem) &
+                             (Inputs['Element'] == element) &
+                             (Inputs['Component'] == component) &
+                             (Inputs['Description'].str.contains(
+                                 '|'.join(opex_categories)))].Number.sum() * Capex_component
+
+    except:
+        Opex_component = 1_500_000
 
     if Debug:
         display('OPEX component {}: {} eu for {} unit(s)'.format(component, Opex_component, Number_of_units))
