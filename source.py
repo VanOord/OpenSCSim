@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
+from copy import deepcopy
 from openpyxl import load_workbook  # conda install openpyxl
 
 
@@ -56,15 +57,15 @@ def create_cashflow_dataframe(startyear=2000, lifecycle=11,
 
     # add capex from input
     for year in capex['years']:
-        df['capex'].loc[year] = capex['values'][capex['years'] == year]
+        df.loc[year, 'capex'] = capex['values'][capex['years'] == year]
 
     # add opex from input
     for year in opex['years']:
-        df['opex'].loc[year] = opex['values'][opex['years'] == year]
+        df.loc[year, 'opex'] = opex['values'][opex['years'] == year]
 
     # add revenue from input
     for year in revenue['years']:
-        df['revenue'].loc[year] = revenue['values'][revenue['years'] == year]
+        df.loc[year, 'revenue'] = revenue['values'][revenue['years'] == year]
 
     # assert that dataframe adheres to prescribed standards
     test_dataframe(df)
@@ -107,9 +108,9 @@ def combine_cashflow_dataframes(dfs):
 
     for df in dfs:
         for year in df.years.tolist():
-            df_combined['capex'].loc[year] = df_combined['capex'].loc[year] + df['capex'].loc[year]
-            df_combined['opex'].loc[year] = df_combined['opex'].loc[year] + df['opex'].loc[year]
-            df_combined['revenue'].loc[year] = df_combined['revenue'].loc[year] + df['revenue'].loc[year]
+            df_combined.loc[year, 'capex'] = (df_combined['capex'].loc[year] + df['capex'].loc[year]).copy()
+            df_combined.loc[year, 'opex'] = (df_combined['opex'].loc[year] + df['opex'].loc[year]).copy()
+            df_combined.loc[year,'revenue'] = (df_combined['revenue'].loc[year] + df['revenue'].loc[year]).copy()
 
     return df_combined
 
@@ -130,7 +131,7 @@ def calculate_npv(df, baseyear=2000, interest=0.07):
     test_dataframe(df)
 
     # collect the cashflows and add a 'cashflow' column
-    df['cashflow'] = df.capex + df.opex + df.revenue
+    df['cashflow'] = df.capex.copy() + df.opex.copy() + df.revenue.copy()
 
     # add the cumsum of cashflows to the 'cashflow_sum' column
     df['cashflow_sum'] = df['cashflow'].cumsum()
@@ -140,8 +141,7 @@ def calculate_npv(df, baseyear=2000, interest=0.07):
 
     # calculate the npv through the years from the 2nd year up to the end and add the values to the 'npv' column
     for year in df.years.tolist()[1:]:
-        # C_0 = C_n (1 + r) ** -n      (see Ports and Waterways - Part I - Equation 2.2, p. 42)
-        df['npv'].loc[year] = df['cashflow'].loc[year] * (1 + interest) ** (-1 * (year - baseyear))
+        df.loc[year, 'npv'] = df['cashflow'].loc[year] * (1 + interest) ** (-1 * (year - baseyear))
 
     # add the cumsum of npvs to the 'npv_sum' column
     df['npv_sum'] = df['npv'].cumsum()
