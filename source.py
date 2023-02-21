@@ -547,23 +547,7 @@ def Inputs_2_cashflow(Inputs,
         Number_of_units = 1
 
     if Debug:
-        display('Construction items {}: {} {}'.format(component, Number_of_units, Units))
-
-    # CAPEX per unit
-    # NB: we may want to separate these later (if we want to show which components are most influential)
-    try:
-        Capex_per_unit = Inputs[
-            (Inputs['Sub-system'] == subsystem) &
-            (Inputs['Element'] == element) &
-            (Inputs['Component'] == component) &
-            (Inputs['Description'].str.contains(
-                '|'.join(capex_categories)))].Number.sum()
-
-    except:
-        Capex_per_unit = 1_500_000 * Number_of_units
-
-    if Debug:
-        display('CAPEX component {}: {} eu per {}'.format(component, Capex_per_unit, Units))
+        display('Number of units {}: {} {}'.format(component, Number_of_units, Units))
 
     # Construction duration (must be an integer)
     try:
@@ -577,6 +561,8 @@ def Inputs_2_cashflow(Inputs,
 
     if Debug:
         display('Construction duration {}: {} years'.format(component, Construction_duration))
+
+    assert isinstance(Construction_duration, int), f"Construction_duration must be an integer"
 
     # Share of Investments
     try:
@@ -607,6 +593,8 @@ def Inputs_2_cashflow(Inputs,
 
     if Debug:
         display('Construction allocation {}: {} per year'.format(component, Construction_allocation))
+
+    assert len(Construction_allocation)==Construction_duration, f"Length of Construction_allocation list must be equal to Construction_duration"
 
     # Economic Lifetime (must be an integer)
     try:
@@ -729,6 +717,22 @@ def Inputs_2_cashflow(Inputs,
         previous = previous * (1 + escalation_rate)
         escalation_list.append(previous)
         escalation_years.append(year)
+
+    # CAPEX per unit
+    # NB: we may want to separate these later (if we want to show which components are most influential)
+    try:
+        Capex_per_unit = Inputs[
+            (Inputs['Sub-system'] == subsystem) &
+            (Inputs['Element'] == element) &
+            (Inputs['Component'] == component) &
+            (Inputs['Description'].str.contains(
+                '|'.join(capex_categories)))].Number.sum()
+
+    except:
+        Capex_per_unit = 1_500_000 * Number_of_units
+
+    if Debug:
+        display('CAPEX total {}: {} eu per {}'.format(component, Capex_per_unit, Units))
 
     # generate CAPEX values
     capex_years = list(range(startyear, startyear + Construction_duration))
