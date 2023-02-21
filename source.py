@@ -56,16 +56,16 @@ def create_cashflow_dataframe(startyear=2000, lifecycle=11,
     df['revenue'] = 0
 
     # add capex from input
-    for year in capex['years']:
-        df.loc[year, 'capex'] = capex['values'][capex['years'] == year]
+    for index, year in enumerate(capex['years']):
+        df.loc[year, 'capex'] = capex['values'][index]
 
     # add opex from input
-    for year in opex['years']:
-        df.loc[year, 'opex'] = opex['values'][opex['years'] == year]
+    for index, year in enumerate(opex['years']):
+        df.loc[year, 'opex'] = opex['values'][index]
 
     # add revenue from input
-    for year in revenue['years']:
-        df.loc[year, 'revenue'] = revenue['values'][revenue['years'] == year]
+    for index, year in enumerate(revenue['years']):
+        df.loc[year, 'revenue'] = revenue['values'][index]
 
     # assert that dataframe adheres to prescribed standards
     test_dataframe(df)
@@ -225,35 +225,67 @@ def Inputs_2_cashflow(Inputs,
 
     Method returns cashflow dataframe
     """
+
+    # Escalation base year
+    try:
+        escalation_base_year = Inputs[
+            (Inputs['Category'] == 'System input') &
+            (Inputs['Description'].str.contains('Escalation base year'))].Number.item()
+
+    except:
+        escalation_base_year = 2000
+
+    if Debug:
+        display('Escalation base year {}: {}'.format(component, escalation_base_year))
+
+    assert escalation_base_year <= startyear, f"escalation_base_year should be smaller or equal to startyear"
+
+    # Escalation rate
+    try:
+        escalation_rate = Inputs[
+            (Inputs['Category'] == 'System input') &
+            (Inputs['Description'].str.contains('Escalation rate'))].Number.item()
+
+    except:
+        escalation_rate = 0.02
+
+    if Debug:
+        display('Escalation rate {}: {}'.format(component, escalation_rate))
+
     # Number of units
     try:
         Number_of_units = Inputs[
             (Inputs['Sub-system'] == subsystem) &
             (Inputs['Element'] == element) &
             (Inputs['Component'] == component) &
-            (Inputs['Category'] == 'General') &
             (Inputs['Description'] == 'Number of units')].Number.item()
+        Units = Inputs[
+            (Inputs['Sub-system'] == subsystem) &
+            (Inputs['Element'] == element) &
+            (Inputs['Component'] == component) &
+            (Inputs['Description'] == 'Number of units')].Unit.item()
+
     except:
         Number_of_units = 1
 
     if Debug:
-        display('Construction items {}: {} units'.format(component, Number_of_units))
+        display('Construction items {}: {} {}'.format(component, Number_of_units, Units))
 
-    # CAPEX components
+    # CAPEX per unit
     # NB: we may want to separate these later (if we want to show which components are most influential)
     try:
-        Capex_component = Inputs[
-                              (Inputs['Sub-system'] == subsystem) &
-                              (Inputs['Element'] == element) &
-                              (Inputs['Component'] == component) &
-                              (Inputs['Description'].str.contains(
-                                  '|'.join(capex_categories)))].Number.sum() * Number_of_units
+        Capex_per_unit = Inputs[
+            (Inputs['Sub-system'] == subsystem) &
+            (Inputs['Element'] == element) &
+            (Inputs['Component'] == component) &
+            (Inputs['Description'].str.contains(
+                '|'.join(capex_categories)))].Number.sum()
 
     except:
-        Capex_component = 1_500_000 * Number_of_units
+        Capex_per_unit = 1_500_000 * Number_of_units
 
     if Debug:
-        display('CAPEX component {}: {} eu for {} unit(s)'.format(component, Capex_component, Number_of_units))
+        display('CAPEX component {}: {} eu per {}'.format(component, Capex_per_unit, Units))
 
     # Construction duration (must be an integer)
     try:
@@ -261,7 +293,6 @@ def Inputs_2_cashflow(Inputs,
                                         (Inputs['Sub-system'] == subsystem) &
                                         (Inputs['Element'] == element) &
                                         (Inputs['Component'] == component) &
-                                        (Inputs['Category'] == 'Capex') &
                                         (Inputs['Description'] == 'Construction duration')].Number.item())
     except:
         Construction_duration = 3
@@ -273,10 +304,10 @@ def Inputs_2_cashflow(Inputs,
     try:
         # isolate the rows that contain 'Share of Investments in Year' and remove the string to only get the year numbers
         years = list(Inputs[
-                         (Inputs['Sub-system'] == subsystem) &
-                         (Inputs['Element'] == element) &
-                         (Inputs['Component'] == component) &
-                         (Inputs['Description'].str.contains('Share of Investments in Year'))].Description.str.replace(
+            (Inputs['Sub-system'] == subsystem) &
+            (Inputs['Element'] == element) &
+            (Inputs['Component'] == component) &
+            (Inputs['Description'].str.contains('Share of Investments in Year'))].Description.str.replace(
             'Share of Investments in Year ', ''))
 
         # transform the year numbers from string to in and sort them to be certain of the order
@@ -371,7 +402,6 @@ def Inputs_2_cashflow(Inputs,
 
     # Insurance Rate
     try:
-
         insurance_rate = Inputs[
             (Inputs['Sub-system'] == subsystem) &
             (Inputs['Element'] == element) &
@@ -413,38 +443,324 @@ def Inputs_2_cashflow(Inputs,
         display('Residual Value {}: {}'.format(component, residual_value))
 
     # -----------------------------------------------
+    # generate a list of escalation factors
+    previous = 1
+    escalation_list = []
+    escalation_years = []
+    for index, year in enumerate(list(range(escalation_base_year, startyear + Construction_duration))):
+        previous = previous * (1 + escalation_rate)
+        escalation_list.append(previous)
+        escalation_years.append(year)
 
-    # OPEX components
-    # NB: we may want to separate these later (if we want to show which components are most influential)
-    try:
-        Opex_component = Inputs[
-                             (Inputs['Sub-system'] == subsystem) &
-                             (Inputs['Element'] == element) &
-                             (Inputs['Component'] == component) &
-                             (Inputs['Description'].str.contains(
-                                 '|'.join(opex_categories)))].Number.sum() * Capex_component
+    # generate CAPEX values
+    capex_years = list(range(startyear, startyear + Construction_duration))
+    capex_values = [-item * Capex_per_unit * Number_of_units for item in Construction_allocation]
 
-    except:
-        Opex_component = 1_500_000
+    # escalate the CAPEX using the list of escalation factors
+    for i, capex_year in enumerate(capex_years):
+        capex_values[i] = capex_values[i] * escalation_list[
+            [index for index, escalation_year in enumerate(escalation_years) if escalation_year == capex_year][0]]
 
-    if Debug:
-        display('OPEX component {}: {} eu for {} unit(s)'.format(component, Opex_component, Number_of_units))
+    # use the sum of the escalated CAPEX values as OPEX value
+    opex_value = sum(capex_values) * Inputs[
+        (Inputs['Sub-system'] == subsystem) &
+        (Inputs['Element'] == element) &
+        (Inputs['Component'] == component) &
+        (Inputs['Description'].str.contains(
+            '|'.join(capex_categories)))].Number.sum()
 
+    # generate a dummy Revenue_component (to be implemented)
     Revenue_component = 0
 
+    df = create_cashflow_dataframe(startyear=startyear, lifecycle=lifecycle,
+                                   capex={'years': capex_years,
+                                          'values': capex_values},
+                                   opex={'years': list(
+                                       range(startyear + Construction_duration, startyear + lifecycle)),
+                                       'values': len(list(
+                                           range(startyear + Construction_duration, startyear + lifecycle))) * [
+                                                     opex_value]},
+                                   revenue={'years': list(
+                                       range(startyear + (Construction_duration), startyear + lifecycle)),
+                                       'values': len(list(range(startyear + (Construction_duration),
+                                                                startyear + lifecycle))) * [Revenue_component]})
+
+    return df
+
+
+def Inputs_2_cashflow(Inputs,
+                      startyear=2000,
+                      lifecycle=11,
+                      subsystem='Wind energy source & Transport',
+                      element='Offshore wind park',
+                      component='Foundations',
+                      capex_categories=['Development and Project Management', 'Procurement',
+                                        'Installation and Commissioning'],
+                      opex_categories=['Yearly Variable Costs Rate', 'Insurance Rate'],
+                      Debug=False):
+    """
+    Assuming columns Sub-system, Element and Component allways exist
+
+    Method returns cashflow dataframe
+    """
+
+    # Escalation base year
+    try:
+        escalation_base_year = Inputs[
+            (Inputs['Category'] == 'System input') &
+            (Inputs['Description'].str.contains('Escalation base year'))].Number.item()
+
+    except:
+        escalation_base_year = 2000
+
     if Debug:
-        display('Revenue {}: {} euro/unit'.format(component, Revenue_component))
+        display('Escalation base year {}: {}'.format(component, escalation_base_year))
+
+    assert escalation_base_year <= startyear, f"escalation_base_year should be smaller or equal to startyear"
+
+    # Escalation rate
+    try:
+        escalation_rate = Inputs[
+            (Inputs['Category'] == 'System input') &
+            (Inputs['Description'].str.contains('Escalation rate'))].Number.item()
+
+    except:
+        escalation_rate = 0.02
+
+    if Debug:
+        display('Escalation rate {}: {}'.format(component, escalation_rate))
+
+    # Number of units
+    try:
+        Number_of_units = Inputs[
+            (Inputs['Sub-system'] == subsystem) &
+            (Inputs['Element'] == element) &
+            (Inputs['Component'] == component) &
+            (Inputs['Description'] == 'Number of units')].Number.item()
+        Units = Inputs[
+            (Inputs['Sub-system'] == subsystem) &
+            (Inputs['Element'] == element) &
+            (Inputs['Component'] == component) &
+            (Inputs['Description'] == 'Number of units')].Unit.item()
+
+    except:
+        Number_of_units = 1
+
+    if Debug:
+        display('Construction items {}: {} {}'.format(component, Number_of_units, Units))
+
+    # CAPEX per unit
+    # NB: we may want to separate these later (if we want to show which components are most influential)
+    try:
+        Capex_per_unit = Inputs[
+            (Inputs['Sub-system'] == subsystem) &
+            (Inputs['Element'] == element) &
+            (Inputs['Component'] == component) &
+            (Inputs['Description'].str.contains(
+                '|'.join(capex_categories)))].Number.sum()
+
+    except:
+        Capex_per_unit = 1_500_000 * Number_of_units
+
+    if Debug:
+        display('CAPEX component {}: {} eu per {}'.format(component, Capex_per_unit, Units))
+
+    # Construction duration (must be an integer)
+    try:
+        Construction_duration = int(Inputs[
+                                        (Inputs['Sub-system'] == subsystem) &
+                                        (Inputs['Element'] == element) &
+                                        (Inputs['Component'] == component) &
+                                        (Inputs['Description'] == 'Construction duration')].Number.item())
+    except:
+        Construction_duration = 3
+
+    if Debug:
+        display('Construction duration {}: {} years'.format(component, Construction_duration))
+
+    # Share of Investments
+    try:
+        # isolate the rows that contain 'Share of Investments in Year' and remove the string to only get the year numbers
+        years = list(Inputs[
+            (Inputs['Sub-system'] == subsystem) &
+            (Inputs['Element'] == element) &
+            (Inputs['Component'] == component) &
+            (Inputs['Description'].str.contains('Share of Investments in Year'))].Description.str.replace(
+            'Share of Investments in Year ', ''))
+
+        # transform the year numbers from string to in and sort them to be certain of the order
+        years = [int(x) for x in years]
+        years.sort()
+
+        # now extract the allocations, since years are sorted we know for sure now that the allocations are in the right order
+        Construction_allocation = []
+        for year in years:
+            Construction_allocation.append(Inputs[
+                                               (Inputs['Sub-system'] == subsystem) &
+                                               (Inputs['Element'] == element) &
+                                               (Inputs['Component'] == component) &
+                                               (Inputs['Description'].str.contains(
+                                                   'Share of Investments in Year ' + str(year)))
+                                               ].Number.item())
+    except:
+        Construction_allocation = [0.4, 0.3, 0.3]
+
+    if Debug:
+        display('Construction allocation {}: {} per year'.format(component, Construction_allocation))
+
+    # Economic Lifetime (must be an integer)
+    try:
+        lifecycle = int(Inputs[
+                            (Inputs['Sub-system'] == subsystem) &
+                            (Inputs['Element'] == element) &
+                            (Inputs['Component'] == component) &
+                            (Inputs['Description'] == 'Economic Lifetime')].Number.item())
+
+    except:
+        lifecycle = 50
+
+    if Debug:
+        display('Economic Lifetime {}: {} years'.format(component, lifecycle))
+
+    # Depreciation Flag
+    try:
+        depreciation_flag = Inputs[
+            (Inputs['Sub-system'] == subsystem) &
+            (Inputs['Element'] == element) &
+            (Inputs['Component'] == component) &
+            (Inputs['Description'] == 'Depreciation Flag')].Number.item()
+
+    except:
+        depreciation_flag = 1
+
+    if Debug:
+        display('Depreciation Flag {}: {}'.format(component, depreciation_flag))
+
+    # Yearly Variable Costs Flag
+    try:
+        yearly_variable_costs_flag = Inputs[
+            (Inputs['Sub-system'] == subsystem) &
+            (Inputs['Element'] == element) &
+            (Inputs['Component'] == component) &
+            (Inputs['Description'] == 'Yearly Variable Costs Flag')].Number.item()
+
+    except:
+        yearly_variable_costs_flag = 1
+
+    if Debug:
+        display('Yearly Variable Costs Flag {}: {}'.format(component, yearly_variable_costs_flag))
+
+    # Yearly Variable Costs Rate
+    try:
+        yearly_variable_cost_rate = Inputs[
+            (Inputs['Sub-system'] == subsystem) &
+            (Inputs['Element'] == element) &
+            (Inputs['Component'] == component) &
+            (Inputs['Description'] == 'Yearly Variable Costs Rate')].Number.item()
+
+    except:
+        yearly_variable_cost_rate = 1
+
+    if Debug:
+        display('Yearly Variable Costs Rate {}: {}'.format(component, yearly_variable_cost_rate))
+
+    # Insurance Flag
+    try:
+        insurance_flag = Inputs[
+            (Inputs['Sub-system'] == subsystem) &
+            (Inputs['Element'] == element) &
+            (Inputs['Component'] == component) &
+            (Inputs['Description'] == 'Insurance Flag')].Number.item()
+
+    except:
+        insurance_flag = 1
+
+    if Debug:
+        display('Insurance Flag {}: {}'.format(component, insurance_flag))
+
+    # Insurance Rate
+    try:
+        insurance_rate = Inputs[
+            (Inputs['Sub-system'] == subsystem) &
+            (Inputs['Element'] == element) &
+            (Inputs['Component'] == component) &
+            (Inputs['Description'] == 'Insurance Rate')].Number.item()
+
+    except:
+        insurance_rate = 1
+
+    if Debug:
+        display('Insurance Rate {}: {}'.format(component, insurance_rate))
+
+    # Decommissioning
+    try:
+        decommissioning = Inputs[
+            (Inputs['Sub-system'] == subsystem) &
+            (Inputs['Element'] == element) &
+            (Inputs['Component'] == component) &
+            (Inputs['Description'].str.contains('decommissioning'))].Number.item()
+
+    except:
+        decommissioning = 1
+
+    if Debug:
+        display('Decommissioning {}: {}'.format(component, decommissioning))
+
+    # Residual Value
+    try:
+        residual_value = Inputs[
+            (Inputs['Sub-system'] == subsystem) &
+            (Inputs['Element'] == element) &
+            (Inputs['Component'] == component) &
+            (Inputs['Description'].str.contains('residual value'))].Number.item()
+
+    except:
+        residual_value = 0.01
+
+    if Debug:
+        display('Residual Value {}: {}'.format(component, residual_value))
+
+    # -----------------------------------------------
+    # generate a list of escalation factors
+    previous = 1
+    escalation_list = []
+    escalation_years = []
+    for index, year in enumerate(list(range(escalation_base_year, startyear + Construction_duration))):
+        previous = previous * (1 + escalation_rate)
+        escalation_list.append(previous)
+        escalation_years.append(year)
+
+    # generate CAPEX values
+    capex_years = list(range(startyear, startyear + Construction_duration))
+    capex_values = [-item * Capex_per_unit * Number_of_units for item in Construction_allocation]
+
+    # escalate the CAPEX using the list of escalation factors
+    for i, capex_year in enumerate(capex_years):
+        capex_values[i] = capex_values[i] * escalation_list[
+            [index for index, escalation_year in enumerate(escalation_years) if escalation_year == capex_year][0]]
+
+    # use the sum of the escalated CAPEX values as OPEX value
+    opex_value = sum(capex_values) * Inputs[
+        (Inputs['Sub-system'] == subsystem) &
+        (Inputs['Element'] == element) &
+        (Inputs['Component'] == component) &
+        (Inputs['Description'].str.contains(
+            '|'.join(opex_categories)))].Number.sum()
+
+    # generate a dummy Revenue_component (to be implemented)
+    Revenue_component = 0
 
     df = create_cashflow_dataframe(startyear=startyear, lifecycle=lifecycle,
-                                   capex={'years': list(range(startyear + 1, startyear + 1 + (Construction_duration))),
-                                          'values': [-item * Capex_component for item in Construction_allocation]},
+                                   capex={'years': capex_years,
+                                          'values': capex_values},
                                    opex={'years': list(
-                                       range(startyear + 1 + (Construction_duration), startyear + lifecycle)),
+                                       range(startyear + Construction_duration, startyear + lifecycle)),
                                        'values': len(list(
-                                           range(startyear + 1 + (Construction_duration), startyear + lifecycle))) * [
-                                                     -Opex_component]},
+                                           range(startyear + Construction_duration, startyear + lifecycle))) * [
+                                                     opex_value]},
                                    revenue={'years': list(
-                                       range(startyear + 1 + (Construction_duration), startyear + lifecycle)),
-                                       'values': len(list(range(startyear + 1 + (Construction_duration),
+                                       range(startyear + (Construction_duration), startyear + lifecycle)),
+                                       'values': len(list(range(startyear + (Construction_duration),
                                                                 startyear + lifecycle))) * [Revenue_component]})
+
     return df
