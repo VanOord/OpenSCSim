@@ -718,6 +718,10 @@ def Inputs_2_cashflow(Inputs,
         escalation_list.append(previous)
         escalation_years.append(year)
 
+    if Debug:
+        display('Escalation years: {}'.format(escalation_years))
+        display('Escalation values: {}'.format(escalation_list))
+
     # CAPEX per unit
     # NB: we may want to separate these later (if we want to show which components are most influential)
     try:
@@ -738,10 +742,18 @@ def Inputs_2_cashflow(Inputs,
     capex_years = list(range(startyear, startyear + Construction_duration))
     capex_values = [-item * Capex_per_unit * Number_of_units for item in Construction_allocation]
 
+    if Debug:
+        display('CAPEX years: {}'.format(capex_years))
+        display('CAPEX values: {}'.format(capex_values))
+
     # escalate the CAPEX using the list of escalation factors
     for i, capex_year in enumerate(capex_years):
         capex_values[i] = capex_values[i] * escalation_list[
             [index for index, escalation_year in enumerate(escalation_years) if escalation_year == capex_year][0]]
+
+    if Debug:
+        display('CAPEX years escalated: {}'.format(capex_years))
+        display('CAPEX values escalated: {}'.format(capex_values))
 
     # use the sum of the escalated CAPEX values as OPEX value
     opex_value = sum(capex_values) * Inputs[
@@ -750,6 +762,9 @@ def Inputs_2_cashflow(Inputs,
         (Inputs['Component'] == component) &
         (Inputs['Description'].str.contains(
             '|'.join(opex_categories)))].Number.sum()
+
+    if Debug:
+        display('OPEX value: {}'.format(opex_value))
 
     # generate a dummy Revenue_component (to be implemented)
     Revenue_component = 0
