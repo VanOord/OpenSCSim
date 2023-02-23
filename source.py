@@ -140,7 +140,7 @@ def calculate_npv(df, baseyear=2000, interest=0.07):
     df['npv'] = 0
 
     # calculate the npv through the years from the 2nd year up to the end and add the values to the 'npv' column
-    for year in df.years.tolist()[1:]:
+    for year in df.years.tolist()[:]:
         df.loc[year, 'npv'] = df['cashflow'].loc[year] * (1 + interest) ** (-1 * (year - baseyear))
 
     # add the cumsum of npvs to the 'npv_sum' column
@@ -190,7 +190,7 @@ def create_npv_plot(df, title=r'CAPEX, OPEX and Revenues and NPV', fname=r'test.
                         fontsize=fontsize)
 
     ax1.grid(which='major', axis='both')
-    ax1.set_xlim([df.years.min(), df.years.max() + 1])
+    ax1.set_xlim([df.years.min() - 1, df.years.max() + 1])
     ax1.set_ylim(cash_flow_lims)
 
     # ----
@@ -443,10 +443,11 @@ def Inputs_2_cashflow(Inputs,
         display('Residual Value {}: {}'.format(component, residual_value))
 
     # -----------------------------------------------
+
     # generate a list of escalation factors
-    previous = 1
     escalation_list = []
     escalation_years = []
+    previous = 1
     for index, year in enumerate(list(range(escalation_base_year, startyear + Construction_duration))):
         previous = previous * (1 + escalation_rate)
         escalation_list.append(previous)
@@ -467,7 +468,7 @@ def Inputs_2_cashflow(Inputs,
         (Inputs['Element'] == element) &
         (Inputs['Component'] == component) &
         (Inputs['Description'].str.contains(
-            '|'.join(capex_categories)))].Number.sum()
+            '|'.join(opex_categories)))].Number.sum()
 
     # generate a dummy Revenue_component (to be implemented)
     Revenue_component = 0
@@ -713,7 +714,7 @@ def Inputs_2_cashflow(Inputs,
     previous = 1
     escalation_list = []
     escalation_years = []
-    for index, year in enumerate(list(range(escalation_base_year, startyear + Construction_duration))):
+    for index, year in enumerate(list(range(escalation_base_year, startyear + lifecycle))):
         previous = previous * (1 + escalation_rate)
         escalation_list.append(previous)
         escalation_years.append(year)
@@ -763,8 +764,18 @@ def Inputs_2_cashflow(Inputs,
         (Inputs['Description'].str.contains(
             '|'.join(opex_categories)))].Number.sum()
 
+    opex_years = list(range(startyear + Construction_duration, startyear + lifecycle))
+    opex_values = [opex_value] * len(opex_years)
+
+    # escalate the OPEX using the list of escalation factors
+    for i, opex_year in enumerate(opex_years):
+        opex_values[i] = opex_values[i] * escalation_list[
+            [index for index, escalation_year in enumerate(escalation_years) if escalation_year == opex_year][0]]
+
     if Debug:
         display('OPEX value: {}'.format(opex_value))
+        display('OPEX years escalated: {}'.format(opex_years))
+        display('OPEX values escalated: {}'.format(opex_values))
 
     # generate a dummy Revenue_component (to be implemented)
     Revenue_component = 0
@@ -772,11 +783,8 @@ def Inputs_2_cashflow(Inputs,
     df = create_cashflow_dataframe(startyear=startyear, lifecycle=lifecycle,
                                    capex={'years': capex_years,
                                           'values': capex_values},
-                                   opex={'years': list(
-                                       range(startyear + Construction_duration, startyear + lifecycle)),
-                                       'values': len(list(
-                                           range(startyear + Construction_duration, startyear + lifecycle))) * [
-                                                     opex_value]},
+                                   opex={'years': opex_years,
+                                       'values': opex_values},
                                    revenue={'years': list(
                                        range(startyear + (Construction_duration), startyear + lifecycle)),
                                        'values': len(list(range(startyear + (Construction_duration),
