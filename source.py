@@ -24,7 +24,7 @@ def test_dataframe(df):
     assert 'revenue' in df.columns, f"expected column 'revenue' not found"
 
 
-def create_cashflow_dataframe(startyear=2000, lifecycle=11,
+def create_cashflow_dataframe(escalation_base_year=2023, lifecycle=50,
                               capex={'years': [2001, 2002],
                                      'values': [-5_000_000, -5_000_000]},
                               opex={'years': list(range(2003, 2011)),
@@ -45,7 +45,7 @@ def create_cashflow_dataframe(startyear=2000, lifecycle=11,
     df = pd.DataFrame()
 
     # create list of years using startyear and lifecycle and set years as index
-    years = list(range(startyear, startyear + lifecycle))
+    years = list(range(escalation_base_year, escalation_base_year + lifecycle + 1))
     df['years'] = years
     df.index = years
     df.index.name = 'years'
@@ -141,9 +141,8 @@ def calculate_npv(df, baseyear=2000, WACC=0.07):
 
     # calculate the npv through the years from the 2nd year up to the end and add the values to the 'npv' column
     for year in df.years.tolist()[:]:
-        # df.loc[year, 'npv'] = df['cashflow'].loc[year] * (1 + interest) ** (-1 * (year - baseyear))
         df.loc[year, 'npv'] = df['cashflow'].loc[year] * (1 /((1 + WACC) ** (year - baseyear + 1)))
- 
+
     # add the cumsum of npvs to the 'npv_sum' column
     df['npv_sum'] = df['npv'].cumsum()
 
@@ -320,7 +319,7 @@ def Inputs_2_cashflow(Inputs,
 
     # Economic Lifetime (must be an integer)
     try:
-        lifecycle = int(Inputs[
+        Economic_lifetime = int(Inputs[
                             (Inputs['Sub-system'] == subsystem) &
                             (Inputs['Element'] == element) &
                             (Inputs['Component'] == component) &
@@ -330,7 +329,7 @@ def Inputs_2_cashflow(Inputs,
         lifecycle = 50
 
     if Debug:
-        display('Economic Lifetime {}: {} years'.format(component, lifecycle))
+        display('Economic Lifetime {}: {} years'.format(component, Economic_lifetime))
 
     # Depreciation Flag
     try:
@@ -435,7 +434,7 @@ def Inputs_2_cashflow(Inputs,
     previous = 1
     escalation_list = []
     escalation_years = []
-    for index, year in enumerate(list(range(escalation_base_year, startyear + lifecycle))):
+    for index, year in enumerate(list(range(escalation_base_year, escalation_base_year + lifecycle + 1))):
         previous = previous * (1 + escalation_rate)
         escalation_list.append(previous)
         escalation_years.append(year)
@@ -460,6 +459,10 @@ def Inputs_2_cashflow(Inputs,
     if Debug:
         display('CAPEX total {}: {} eu per {}'.format(component, Capex_per_unit, Units))
 
+    # initialise revenue values
+    revenue_years = []
+    revenue_values = []
+
     # generate CAPEX values
     capex_years = list(range(startyear, startyear + Construction_duration))
     capex_values = [-item * Capex_per_unit * Number_of_units for item in Construction_allocation]
@@ -467,6 +470,29 @@ def Inputs_2_cashflow(Inputs,
     if Debug:
         display('CAPEX years: {}'.format(capex_years))
         display('CAPEX values: {}'.format(capex_values))
+
+    # implement reinvestment here
+    year = startyear
+    investmentyear = startyear
+    while year <= escalation_base_year + lifecycle:
+        if year == escalation_base_year + lifecycle:
+            # decommission
+            print('decommmissioning in {}'.format(year))
+            capex_years.append(year)
+            capex_values.append(-Capex_per_unit * Number_of_units * decommissioning)
+
+            revenue_years.append(year)
+            revenue_values.append(Capex_per_unit * Number_of_units * ((Economic_lifetime - (year - investmentyear)) / Economic_lifetime))
+
+            print('Residual value {}'.format(Capex_per_unit * Number_of_units * ((Economic_lifetime - (year - investmentyear)) / Economic_lifetime)))
+        elif year == investmentyear + Economic_lifetime:
+            # reinvest
+            print('reinvest in {}'.format(year))
+            capex_years.append(year)
+            capex_values.append(-Capex_per_unit * Number_of_units)
+            investmentyear = year
+
+        year = year + 1
 
     # escalate the CAPEX using the list of escalation factors
     for i, capex_year in enumerate(capex_years):
@@ -485,7 +511,7 @@ def Inputs_2_cashflow(Inputs,
         (Inputs['Description'].str.contains(
             '|'.join(opex_categories)))].Number.sum()
 
-    opex_years = list(range(startyear + Construction_duration, startyear + lifecycle))
+    opex_years = list(range(startyear + Construction_duration, escalation_base_year + lifecycle + 1))
     opex_values = [opex_value] * len(opex_years)
 
     # escalate the OPEX using the list of escalation factors
@@ -498,17 +524,18 @@ def Inputs_2_cashflow(Inputs,
         display('OPEX years escalated: {}'.format(opex_years))
         display('OPEX values escalated: {}'.format(opex_values))
 
-    # generate a dummy Revenue_component (to be implemented)
-    Revenue_component = 0
+    # escalate the OPEX using the list of escalation factors
+    for i, revenue_year in enumerate(revenue_years):
+        revenue_values[i] = revenue_values[i] * escalation_list[
+            [index for index, escalation_year in enumerate(escalation_years) if escalation_year == revenue_year][0]]
 
-    df = create_cashflow_dataframe(startyear=startyear, lifecycle=lifecycle,
+    df = create_cashflow_dataframe(escalation_base_year=escalation_base_year, lifecycle=lifecycle,
                                    capex={'years': capex_years,
                                           'values': capex_values},
                                    opex={'years': opex_years,
                                        'values': opex_values},
-                                   revenue={'years': list(
-                                       range(startyear + (Construction_duration), startyear + lifecycle)),
-                                       'values': len(list(range(startyear + (Construction_duration),
-                                                                startyear + lifecycle))) * [Revenue_component]})
+                                   revenue={'years': revenue_years,
+                                       'values': revenue_values})
+
 
     return df
