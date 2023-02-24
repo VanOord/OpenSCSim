@@ -142,11 +142,8 @@ def calculate_npv(df, baseyear=2000, WACC=0.07):
     # calculate the npv through the years from the 2nd year up to the end and add the values to the 'npv' column
     for year in df.years.tolist()[:]:
         # df.loc[year, 'npv'] = df['cashflow'].loc[year] * (1 + interest) ** (-1 * (year - baseyear))
-        df.loc[year, 'npv'] = df['cashflow'].loc[year] * (1 /((1 + WACC) ** (year - baseyear)))
-        print('T: {} - {}'.format((year - baseyear +1), (1 /((1 + WACC) ** (year - baseyear)))))
-
-
-
+        df.loc[year, 'npv'] = df['cashflow'].loc[year] * (1 /((1 + WACC) ** (year - baseyear + 1)))
+ 
     # add the cumsum of npvs to the 'npv_sum' column
     df['npv_sum'] = df['npv'].cumsum()
 
