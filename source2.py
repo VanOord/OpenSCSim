@@ -97,10 +97,14 @@ class CashflowProperties(object):
         self.residual_value = residual_value
 
     def generate_cashflows(self,
-                          startyear=2000,
-                          lifecycle=11,
-                          Debug=False):
-
+                          startyear: int = 2023,
+                          lifecycle: int = 11,
+                          debug: bool = False):
+        """
+        startyear: the year when the first CAPEX investment will be scheduled
+        lifecycle: the overall lifecycle of the project
+        debug:
+        """
         # generate a list of escalation factors
         escalation_list = []
         escalation_years = []
@@ -110,7 +114,7 @@ class CashflowProperties(object):
             escalation_list.append(previous)
             escalation_years.append(year)
 
-        if Debug:
+        if debug:
             display('Escalation years: {}'.format(escalation_years))
             display('Escalation values: {}'.format(escalation_list))
 
@@ -122,39 +126,47 @@ class CashflowProperties(object):
         capex_years = list(range(startyear, startyear + self.construction_duration))
         capex_values = [-item * self.capex_per_unit * self.unit for item in self.share_of_investments]
 
-        if Debug:
+        if debug:
             display('CAPEX years: {}'.format(capex_years))
             display('CAPEX values: {}'.format(capex_values))
 
         # implement reinvestment here
         year = startyear
         investmentyear = startyear
+        insufficient_reinvestment_time = False
         while year <= self.escalation_base_year + lifecycle:
             if year == self.escalation_base_year + lifecycle:
                 # decommission
-                if Debug:
+                if debug:
                     print('decommmissioning in {}'.format(year))
                 capex_years.append(year)
                 capex_values.append(-self.capex_per_unit * self.unit * self.decommissioning_rate)
 
                 revenue_years.append(year)
-                revenue_values.append(self.capex_per_unit * self.unit *
-                                      ((self.economic_lifetime - (year - investmentyear)) / self.economic_lifetime))
+                if not insufficient_reinvestment_time:
+                    residual_value = self.capex_per_unit * self.unit * (self.economic_lifetime - (year - investmentyear)) / self.economic_lifetime
+                    revenue_values.append(residual_value)
+                else:
+                    residual_value = 0
+                    revenue_values.append(residual_value)
 
-                if Debug:
-                    print('Residual value {}'.format(self.capex_per_unit * self.unit *
-                                                     ((self.economic_lifetime - (year - investmentyear)) /
-                                                       self.economic_lifetime)))
+                if debug:
+                    print('Residual value {}'.format(residual_value))
 
             elif year == investmentyear + self.economic_lifetime:
                 # reinvest
-                if Debug:
+                if debug:
                     print('reinvest in {}'.format(year))
 
-                for i in range(self.construction_duration):
-                    investmentyear = year
-                    capex_years.append(year+i)
-                    capex_values.append(-self.capex_per_unit * self.unit * self.share_of_investments[i])
+                if investmentyear + self.economic_lifetime + self.construction_duration <= self.escalation_base_year + lifecycle:
+                    for i in range(self.construction_duration):
+                        investmentyear = year
+                        capex_years.append(year+i)
+                        capex_values.append(-self.capex_per_unit * self.unit * self.share_of_investments[i])
+                else:
+                    insufficient_reinvestment_time = True
+                    if debug:
+                        print('not enough time to reinvest')
 
             year = year + 1
 
@@ -163,7 +175,7 @@ class CashflowProperties(object):
             capex_values[i] = capex_values[i] * escalation_list[
                 [index for index, escalation_year in enumerate(escalation_years) if escalation_year == capex_year][0]]
 
-        if Debug:
+        if debug:
             display('CAPEX years escalated: {}'.format(capex_years))
             display('CAPEX values escalated: {}'.format(capex_values))
 
@@ -179,7 +191,7 @@ class CashflowProperties(object):
             opex_values[i] = opex_values[i] * escalation_list[
                 [index for index, escalation_year in enumerate(escalation_years) if escalation_year == opex_year][0]]
 
-        if Debug:
+        if debug:
             display('OPEX value: {}'.format(opex_value))
             display('OPEX years escalated: {}'.format(opex_years))
             display('OPEX values escalated: {}'.format(opex_values))
@@ -234,7 +246,6 @@ def create_cashflow_dataframe(escalation_base_year=2023, lifecycle=50,
 
     The end result is a dataframe that shows the capital expenses for each year
 
-    Todo: add residual value
     """
 
     df = pd.DataFrame()
@@ -455,7 +466,7 @@ def get_object_data(Inputs,
                     capex_categories=['Development and Project Management', 'Procurement',
                                       'Installation and Commissioning'],
                     opex_categories=['Yearly Variable Costs Rate', 'Insurance Rate'],
-                    Debug=False):
+                    debug=False):
     """
     Assuming columns Sub-system, Element and Component allways exist
 
