@@ -591,7 +591,7 @@ def get_object_data(Inputs,
                                                    'Share of Investments in Year ' + str(year)))
                                                ].Number.item())
 
-        object_data['share_of_investments'] = Construction_allocation
+        object_data['share_of_investments'] = Construction_allocation[:object_data['construction_duration']]
 
     except:
         print('issue detected')
