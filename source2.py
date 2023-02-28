@@ -393,10 +393,10 @@ def create_npv_plot(df, title=r'CAPEX, OPEX and Revenues and NPV', fname=r'test.
     extreme = max([extreme1, extreme2])
 
     if not cash_flow_lims:
-        cash_flow_lims = [-extreme, extreme]
+        cash_flow_lims = [-1.1*extreme, 1.1*extreme]
 
     if not npv_lims:
-        npv_lims = [-extreme, extreme]
+        npv_lims = [-1.1*extreme, 1.1*extreme]
 
     # assert that dataframe adheres to prescribed standards
     test_dataframe(df)
