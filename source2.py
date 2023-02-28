@@ -105,6 +105,8 @@ class CashflowProperties(object):
         lifecycle: the overall lifecycle of the project
         debug:
         """
+        # --------------------------------------------------------------------------------------------------------------
+
         # generate a list of escalation factors
         escalation_list = []
         escalation_years = []
@@ -118,9 +120,7 @@ class CashflowProperties(object):
             display('Escalation years: {}'.format(escalation_years))
             display('Escalation values: {}'.format(escalation_list))
 
-        # initialise revenue values (to store residual value)
-        revenue_years = []
-        revenue_values = []
+        # --------------------------------------------------------------------------------------------------------------
 
         # generate CAPEX values
         capex_years = list(range(startyear, startyear + self.construction_duration))
@@ -140,6 +140,8 @@ class CashflowProperties(object):
         if debug:
             display('summed_escalated_capex: {}'.format(summed_escalated_capex))
 
+        # --------------------------------------------------------------------------------------------------------------
+
         # implement reinvestment here
         year = startyear
         investmentyear = startyear
@@ -152,15 +154,17 @@ class CashflowProperties(object):
                 capex_years.append(year)
                 capex_values.append(summed_escalated_capex * self.decommissioning_rate)
 
-                revenue_years.append(year)
+                # divest
                 if not insufficient_reinvestment_time:
-                    residual_value = self.capex_per_unit * self.unit * (self.economic_lifetime - (year - investmentyear)) / self.economic_lifetime
-                    revenue_values.append(residual_value)
+                    residual_year = year
+                    residual_value = -1 * (summed_escalated_capex - summed_escalated_capex * self.depreciation_rate * (year - investmentyear - self.construction_duration))
                 else:
+                    # when reinvestment is needed, but there is not enough time left to have 1 operational year, residual value will be set to 0
+                    residual_year = year
                     residual_value = 0
-                    revenue_values.append(residual_value)
 
                 if debug:
+                    print('Residual year {}'.format(residual_year))
                     print('Residual value {}'.format(residual_value))
 
             elif year == investmentyear + self.economic_lifetime:
@@ -169,8 +173,8 @@ class CashflowProperties(object):
                     print('reinvest in {}'.format(year))
 
                 if investmentyear + self.economic_lifetime + self.construction_duration <= self.escalation_base_year + lifecycle:
+                    investmentyear = year
                     for i in range(self.construction_duration):
-                        investmentyear = year
                         capex_years.append(year+i)
                         capex_values.append(-self.capex_per_unit * self.unit * self.share_of_investments[i])
                 else:
@@ -189,11 +193,21 @@ class CashflowProperties(object):
             display('CAPEX years escalated: {}'.format(capex_years))
             display('CAPEX values escalated: {}'.format(capex_values))
 
+        if residual_year in capex_years:
+            print('year allready in list so add rather than append')
+            value_index = [index for index, capex_year in enumerate(capex_years) if residual_year == capex_year][0]
+            capex_values[value_index] = capex_values[value_index] + residual_value
+        else:
+            capex_years.append(residual_year)
+            capex_values.append(residual_value)
+
+        # --------------------------------------------------------------------------------------------------------------
+
         # use the sum of the escalated CAPEX values as OPEX value
         opex_value = summed_escalated_capex * \
                      (self.yearly_variable_costs_rate + self.insurance_rate)
 
-        opex_years = list(range(startyear + self.construction_duration, self.escalation_base_year + lifecycle + 1))
+        opex_years = list(range(startyear + self.construction_duration, self.escalation_base_year + lifecycle +1))
         opex_values = [opex_value] * len(opex_years)
 
         # escalate the OPEX using the list of escalation factors
@@ -205,6 +219,12 @@ class CashflowProperties(object):
             display('OPEX value: {}'.format(opex_value))
             display('OPEX years escalated: {}'.format(opex_years))
             display('OPEX values escalated: {}'.format(opex_values))
+
+        # --------------------------------------------------------------------------------------------------------------
+
+        # initialise revenue values (to store residual value)
+        revenue_years = []
+        revenue_values = []
 
         # escalate the revenues using the list of escalation factors
         for i, revenue_year in enumerate(revenue_years):
