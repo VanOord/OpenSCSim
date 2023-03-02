@@ -194,7 +194,7 @@ class CashflowProperties(object):
             display('CAPEX values escalated: {}'.format(capex_values))
 
         if residual_year in capex_years:
-            print('year allready in list so add rather than append')
+            # print('year allready in list so add rather than append')
             value_index = [index for index, capex_year in enumerate(capex_years) if residual_year == capex_year][0]
             capex_values[value_index] = capex_values[value_index] + residual_value
         else:
