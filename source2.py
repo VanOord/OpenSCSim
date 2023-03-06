@@ -221,7 +221,7 @@ class CashflowProperties(object):
                 # divest
                 if not insufficient_reinvestment_time:
                     divestment_year = year
-                    divestment_value = -1 * (summed_escalated_capex - summed_escalated_capex * self.depreciation_rate * (year - investment_years[-1] - self.construction_duration))
+                    divestment_value = -1 * (summed_escalated_capex - summed_escalated_capex * self.depreciation_rate * (year - investment_years[-1] - self.construction_duration + 1))
                 else:
                     # when reinvestment is needed, but there is not enough time left to have 1 operational year, residual value will be set to 0
                     divestment_year = year
@@ -244,8 +244,11 @@ class CashflowProperties(object):
             print('')
             print('divestment year {}'.format(divestment_year))
             if not insufficient_reinvestment_time:
-                print('divestment value (non-escalated) is {:.2f}, based on a summed_escalated_capex of {:.2f}'.format(divestment_value,
-                                                                                                   summed_escalated_capex))
+                print('divestment value (non-escalated) is {:.2f}, based on a summed_escalated_capex value {:.2f} diminished with {} times the depreciation {:.2f}'.format(
+                            divestment_value,
+                            summed_escalated_capex,
+                            (year - investment_years[-1] - self.construction_duration + 1),
+                            summed_escalated_capex * self.depreciation_rate))
             else:
                 print('divestment value (non-escalated) set to {:.2f} (due to insufficient reinvestment time)'.format(
                     divestment_value,
