@@ -766,11 +766,11 @@ def get_object_data(Inputs,
 
     # Depreciation Flag
     try:
-        object_data['depreciation_flag'] = Inputs[
+        object_data['depreciation_flag'] = int(Inputs[
             (Inputs['Sub-system'] == subsystem) &
             (Inputs['Element'] == element) &
             (Inputs['Component'] == component) &
-            (Inputs['Description'] == 'Depreciation Flag')].Number.item()
+            (Inputs['Description'] == 'Depreciation Flag')].Number.item())
 
     except:
         print('issue detected')
@@ -788,11 +788,11 @@ def get_object_data(Inputs,
 
     # Yearly Variable Costs Flag
     try:
-        object_data['yearly_variable_costs_flag'] = Inputs[
+        object_data['yearly_variable_costs_flag'] = int(Inputs[
             (Inputs['Sub-system'] == subsystem) &
             (Inputs['Element'] == element) &
             (Inputs['Component'] == component) &
-            (Inputs['Description'] == 'Yearly Variable Costs Flag')].Number.item()
+            (Inputs['Description'] == 'Yearly Variable Costs Flag')].Number.item())
 
     except:
         print('issue detected')
@@ -810,11 +810,11 @@ def get_object_data(Inputs,
 
     # Insurance Flag
     try:
-        object_data['insurance_flag'] = Inputs[
+        object_data['insurance_flag'] = int(Inputs[
             (Inputs['Sub-system'] == subsystem) &
             (Inputs['Element'] == element) &
             (Inputs['Component'] == component) &
-            (Inputs['Description'] == 'Insurance Flag')].Number.item()
+            (Inputs['Description'] == 'Insurance Flag')].Number.item())
 
     except:
         print('issue detected')
