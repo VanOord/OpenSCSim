@@ -652,11 +652,12 @@ def get_object_data(Inputs,
         'decommissioning_rate': [],
         'residual_value': []}
 
+
     # Escalation base year
     try:
-        object_data['escalation_base_year'] = Inputs[
+        object_data['escalation_base_year'] = int(Inputs[
             (Inputs['Category'] == 'System input') &
-            (Inputs['Description'].str.contains('Escalation base year'))].Number.item()
+            (Inputs['Description'].str.contains('Escalation base year'))].Number.item())
 
     except:
         print('issue detected')
