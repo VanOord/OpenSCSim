@@ -260,14 +260,14 @@ class CashflowProperties(object):
                 print('divestment value: {:.2f}'.format(divestment_value))
                 print('')
 
-        # --------------------------------------------------------------------------------------------------------------
-
         if debug:
             # note that the divestment_value should not be escalated
             print('CAPEX years escalated: {}'.format(capex_years))
             print('CAPEX values escalated: {}'.format(capex_values))
 
         # --------------------------------------------------------------------------------------------------------------
+
+        # 6. add Opex values
 
         if debug:
             print('')
@@ -308,13 +308,11 @@ class CashflowProperties(object):
                          self.escalation_base_year + lifecycle - 1]))
             self.decommissioning_values.append(self.summed_escalated_capex[index] * self.decommissioning_rate)
 
-            # todo: check what will happen if there is insufficient investment time
-
             # add these opex values to the overall list
             opex_years = opex_years + opex_years_inv_cycle
             opex_values = opex_values + opex_values_inv_cycle
 
-        # escalate the OPEX using the list of escalation factors
+        # 7. escalate the OPEX using the list of escalation factors
         opex_values = escalate_list(opex_years, opex_values)
 
         if debug:
@@ -323,13 +321,14 @@ class CashflowProperties(object):
 
         # --------------------------------------------------------------------------------------------------------------
 
-        # escalate the revenues using the list of escalation factors
+        # 8. escalate the revenues using the list of escalation factors
         for i, revenue_year in enumerate(revenue_years):
             revenue_values[i] = revenue_values[i] * escalation_list[
                 [index for index, escalation_year in enumerate(escalation_years) if escalation_year == revenue_year][0]]
 
         # --------------------------------------------------------------------------------------------------------------
 
+        # 9. create dataframe with cashflows
         self.df = create_cashflow_dataframe(escalation_base_year=self.escalation_base_year,
                                             lifecycle=lifecycle,
                                             capex={'years': capex_years,
