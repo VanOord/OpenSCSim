@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+import math
 import matplotlib.pyplot as plt
 
 from copy import deepcopy
@@ -387,13 +388,6 @@ class CashflowProperties(object):
             revenue_values[i] = revenue_values[i] * escalation_list[
                 [index for index, escalation_year in enumerate(escalation_years) if escalation_year == revenue_year][0]]
 
-        if debug:
-            print('')
-            print(capex_years)
-            print(opex_years)
-            print('Revenue years escalated: {}'.format(revenue_years))
-            print('Revenue values escalated: {}'.format(revenue_values))
-
         self.df = create_cashflow_dataframe(escalation_base_year=self.escalation_base_year,
                                        lifecycle=lifecycle,
                                        capex={'years': capex_years,
@@ -551,9 +545,16 @@ def create_npv_plot(df, title=r'CAPEX, OPEX and Revenues and NPV', fname=r'test.
                     cash_flow_lims=[], npv_lims=[]):
     """This method creates a basic plot"""
 
-    extreme1 = round(max([abs(df.npv_sum.min()), abs(df.npv_sum.max())]) / 10 ** 6, -3)
-    extreme2 = round(max([abs(df.cashflow.min()), abs(df.cashflow.max())]) / 10 ** 6, -3)
-    extreme = max([extreme1, extreme2])
+    def round_up(n, decimals=-1):
+        multiplier = 10 ** decimals
+        return math.ceil(n * multiplier) / multiplier
+
+    extreme1 = round_up(max([abs(df.npv_sum.min()), abs(df.npv_sum.max())]) / 10 ** 6, -3)
+    extreme2 = round_up(max([abs(df.cashflow.min()), abs(df.cashflow.max())]) / 10 ** 6, -3)
+    extreme3 = round_up(max([abs(df.capex.min()), abs(df.capex.max())]) / 10 ** 6, -3)
+    extreme4 = round_up(max([abs(df.opex.min()), abs(df.opex.max())]) / 10 ** 6, -3)
+    extreme5 = round_up(max([abs(df.revenue.min()), abs(df.revenue.max())]) / 10 ** 6, -3)
+    extreme = max([extreme1, extreme2, extreme3, extreme4, extreme5])
 
     if not cash_flow_lims:
         cash_flow_lims = [-1.1*extreme, 1.1*extreme]
