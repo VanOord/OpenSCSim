@@ -50,6 +50,7 @@ foundation_data={
     'decommissioning_rate': 0.02,
     'residual_value': 0.01}
 
+
 class CashflowProperties(object):
 
     def __init__(self,
@@ -97,10 +98,17 @@ class CashflowProperties(object):
         self.decommissioning_rate = decommissioning_rate
         self.residual_value = residual_value
 
+        self.investment_years = []
+        self.summed_escalated_capex = []
+        self.divestment_years = []
+        self.divestment_values = []
+        self.decommissioning_years = []
+        self.decommissioning_values = []
+
     def generate_cashflows(self,
-                          startyear: int = 2023,
-                          lifecycle: int = 11,
-                          debug: bool = False):
+                           startyear: int = 2023,
+                           lifecycle: int = 11,
+                           debug: bool = False):
         """
         verschillende Opex periodes telkens op basis de summed escalated capex van de laatste (re)investment
         Opex van de vorige periode loopt door gedurende de herinvesterings capex
@@ -112,290 +120,224 @@ class CashflowProperties(object):
         debug: True: show messages, False: hide messages
         """
 
-        # --------------------------------------------------------------------------------------------------------------
-        if debug:
-            print('')
-            print('*** calculate escalation values ****')
-            print('')
+        def escalate_list(list_years, list_values):
+            for i, list_year in enumerate(list_years):
+                list_values[i] = list_values[i] * self.escalation_values[
+                    [index for index, escalation_year in enumerate(self.escalation_years) if
+                     escalation_year == list_year][0]]
+            return list_values
 
-        # generate a list of escalation factors
-        escalation_list = []
-        escalation_years = []
-        previous = 1
-        for index, year in enumerate(list(range(self.escalation_base_year, self.escalation_base_year + lifecycle))):
-            previous = previous * (1 + self.escalation_rate)
-            escalation_list.append(previous)
-            escalation_years.append(year)
+        # initialise  lists
+        self.escalation_years = []
+        self.escalation_values = []
 
-        if debug:
-            print('Escalation years: {}'.format(escalation_years))
-            print('Escalation values: {}'.format(escalation_list))
-
-        # --------------------------------------------------------------------------------------------------------------
-
-        if debug:
-            print('')
-            print('*** add Capex values + divestment ****')
-            print('')
-
-        # initialise opex lists so we may add decommissioning
         capex_years = []
         capex_values = []
         opex_years = []
         opex_values = []
+        revenue_years = []
+        revenue_values = []
 
-        # implement (re)investment here
+        # --------------------------------------------------------------------------------------------------------------
+
+        # 1. generate a list of escalation factors
+        previous = 1
+        for index, year in enumerate(list(range(self.escalation_base_year, self.escalation_base_year + lifecycle))):
+            # should be "self.escalation_base_year + lifecycle - 1" but range omits the last value (so -1 can be left out)
+            previous = previous * (1 + self.escalation_rate)
+            self.escalation_years.append(year)
+            self.escalation_values.append(previous)
+
+        # --------------------------------------------------------------------------------------------------------------
+
+        if debug:
+            print('')
+            print('*** determine investment_years, capex_years and capex_values ****')
+            print('')
+
+        # 2. loop through years from startyear to escalation_base_year + lifecycle: find (re)invest_years and fill in capex
         year = startyear
-        investment_years = []
         insufficient_reinvestment_time = False
-        while year <= self.escalation_base_year + lifecycle:
+        while year <= self.escalation_base_year + lifecycle - 1:
 
-            # the first action will always be to invest because per definition startyear is the first investment_year
-            if not investment_years or year == investment_years[-1] + self.economic_lifetime:
-                # reinvest
-                if debug:
-                    if not investment_years:
-                        print('initial investment in {}'.format(year))
-                    else:
-                        print('reinvestment in {}'.format(year))
+            if not self.investment_years or year == self.investment_years[-1] + self.economic_lifetime:
+                # the first action will always be to invest because per definition startyear is the first investment_year
+                # then invest each time year == investment_years[-1] + economic_lifetime
 
                 # add investment years (per definition startyear is the first investment_year)
-                investment_years.append(year)
+                if not self.investment_years:
+                    # add the first investment year ...
+                    self.investment_years.append(year)
 
-                if investment_years[-1] + self.construction_duration < self.escalation_base_year + lifecycle:
+                    # ... add the (re)investment capex to the capex_years and capex_values
                     for i in range(self.construction_duration):
-                        capex_years.append(investment_years[-1]+i)
+                        capex_years.append(self.investment_years[-1] + i)
                         capex_values.append(-self.capex_per_unit * self.unit * self.share_of_investments[i])
 
                     if debug:
-                        print('CAPEX years: {}'.format(capex_years))
-                        print('CAPEX values: {}'.format(capex_values))
-
-                    bools = [item >= investment_years[-1] and item <= investment_years[-1] + self.construction_duration for
-                             item in capex_years]
-                    temp_capex_years = deepcopy([a for a, b in zip(capex_years, bools) if b])
-                    temp_capex_values = deepcopy([a for a, b in zip(capex_values, bools) if b])
-
-                    for i, temp_capex_year in enumerate(temp_capex_years):
-                        temp_capex_values[i] = temp_capex_values[i] * escalation_list[
-                            [index for index, escalation_year in enumerate(escalation_years) if
-                             escalation_year == temp_capex_year][0]]
-
-                    summed_escalated_capex = sum(temp_capex_values)
-
-                    if debug:
-                        print('CAPEX years escalated: {}'.format(temp_capex_years))
-                        print('CAPEX values escalated: {}'.format(temp_capex_values))
-                        print('summed_escalated_capex: {:.2f}'.format(summed_escalated_capex))
+                        print('initial investment in {}'.format(year))
                         print('')
 
                 else:
-                    insufficient_reinvestment_time = True
-                    if debug:
-                        print('not enough time to reinvest')
+                    if year + self.construction_duration < self.escalation_base_year + lifecycle:
+                        # if there is sufficient time to implement the (re)investment ...
+                        self.investment_years.append(year)
 
-            if year == self.escalation_base_year + lifecycle:
-                # divest
-                # we can calculate the decommissioning value here because that is NOT escalated
-                bools = [item >= investment_years[-1] and item <= investment_years[-1] + self.construction_duration for item in capex_years]
-                temp_capex_years = deepcopy([a for a, b in zip(capex_years, bools) if b])
-                temp_capex_values = deepcopy([a for a, b in zip(capex_values, bools) if b])
+                        # ... add the (re)investment capex to the capex_years and capex_values
+                        for i in range(self.construction_duration):
+                            capex_years.append(self.investment_years[-1] + i)
+                            capex_values.append(-self.capex_per_unit * self.unit * self.share_of_investments[i])
 
-                for i, temp_capex_year in enumerate(temp_capex_years):
-                    temp_capex_values[i] = temp_capex_values[i] * escalation_list[
-                        [index for index, escalation_year in enumerate(escalation_years) if
-                         escalation_year == temp_capex_year][0]]
+                        if debug:
+                            print('reinvestment in {}'.format(year))
+                            print('')
+                    else:
+                        # ... else trigger the insufficient_reinvestment_time flag and do not add any Capex values
+                        insufficient_reinvestment_time = True
+                        if debug:
+                            print('not enough time to reinvest')
+                            print('')
 
-                summed_escalated_capex = sum(temp_capex_values)
-
-                # escalate the CAPEX using the list of escalation factors
-                for i, capex_year in enumerate(capex_years):
-                    capex_values[i] = capex_values[i] * escalation_list[
-                        [index for index, escalation_year in enumerate(escalation_years) if
-                         escalation_year == capex_year][0]]
-
-                if debug:
-                    print('complete escalated CAPEX values (investment related)')
-                    print('CAPEX years escalated: {}'.format(capex_years))
-                    print('CAPEX values escalated: {}'.format(capex_values))
-
-                # divest
-                if not insufficient_reinvestment_time:
-                    divestment_year = year - 1
-                    divestment_value = -1 * (summed_escalated_capex - summed_escalated_capex * self.depreciation_rate * (year - investment_years[-1] - self.construction_duration + 1))
-                else:
-                    # when reinvestment is needed, but there is not enough time left to have 1 operational year, residual value will be set to 0
-                    divestment_year = year - 1
-                    divestment_value = 0
-
+            # increase the year by one
             year = year + 1
 
-        # add divestment after the escalation of the Capex list since divestment should not be esacalated
-        if divestment_year in capex_years:
-            value_index = [index for index, capex_year in enumerate(capex_years) if divestment_year == capex_year][0]
-            capex_values[value_index] = capex_values[value_index] + divestment_value
-        else:
-            capex_years.append(divestment_year)
-            capex_values.append(divestment_value)
+        # --------------------------------------------------------------------------------------------------------------
 
-        self.divestment_year = divestment_year
-        self.divestment_value = divestment_value
+        # 3. determine the summed_escalated_capex per investment round
+        for index, investment_year in enumerate(self.investment_years):
+            # find the Capex values associated with the last investment (for summed_escalated_capex)
+            bools = [item >= self.investment_years[index] and
+                     item <= self.investment_years[index] + self.construction_duration for
+                     item in capex_years]
+            temp_capex_years = deepcopy([a for a, b in zip(capex_years, bools) if b])
+            temp_capex_values = deepcopy([a for a, b in zip(capex_values, bools) if b])
 
-        if debug:
-            print('')
-            print('divestment year {}'.format(divestment_year))
-            if not insufficient_reinvestment_time:
-                print('divestment value (non-escalated) is {:.2f}, based on a summed_escalated_capex value {:.2f} diminished with {} times the depreciation {:.2f}'.format(
-                            divestment_value,
-                            summed_escalated_capex,
-                            (year - investment_years[-1] - self.construction_duration + 1),
-                            summed_escalated_capex * self.depreciation_rate))
+            # proceed to escalate these
+            temp_capex_values = escalate_list(temp_capex_years, temp_capex_values)
+
+            # store the summed_escalated_capex value
+            self.summed_escalated_capex.append(sum(temp_capex_values))
+
+        # --------------------------------------------------------------------------------------------------------------
+
+        # 4. escalate the CAPEX using the list of escalation factors
+        capex_values = escalate_list(capex_years, capex_values)
+
+        # --------------------------------------------------------------------------------------------------------------
+
+        # 5. add divestment (no escalation)
+        for index, investment_year in enumerate(self.investment_years):
+            # divestment_year
+            # both values could have a -1
+            divestment_year = min([investment_year + self.construction_duration + self.economic_lifetime - 1,
+                                   self.escalation_base_year + lifecycle - 1])
+
+            # divestment_value
+            if investment_year + self.construction_duration + self.economic_lifetime < self.escalation_base_year + lifecycle:
+                divestment_value = -1 * (self.summed_escalated_capex[index] -
+                                         self.summed_escalated_capex[index] * self.depreciation_rate * (
+                                             (self.investment_years[index] + self.construction_duration + self.economic_lifetime - 1) -
+                                             (self.investment_years[index] + self.construction_duration - 1)))
             else:
-                print('divestment value (non-escalated) set to {:.2f} (due to insufficient reinvestment time)'.format(
-                    divestment_value,
-                    summed_escalated_capex))
+                divestment_value = -1 * (self.summed_escalated_capex[index] -
+                                         self.summed_escalated_capex[index] * self.depreciation_rate * (
+                                             (self.escalation_base_year + lifecycle - 1) -
+                                             (self.investment_years[index] + self.construction_duration - 1)))
+
+            # add to capex_values
+            if divestment_year in capex_years:
+                value_index = [index for index, capex_year in enumerate(capex_years) if divestment_year == capex_year][0]
+                capex_values[value_index] = capex_values[value_index] + divestment_value
+            else:
+                capex_years.append(divestment_year)
+                capex_values.append(divestment_value)
+
+            self.divestment_years.append(divestment_year)
+            self.divestment_values.append(divestment_value)
+
+            if debug:
+                print('divestment year: {}'.format(divestment_year))
+                print('divestment value: {:.2f}'.format(divestment_value))
+                print('')
+
+        # --------------------------------------------------------------------------------------------------------------
+
         if debug:
-            print('')
-            print('complete escalated CAPEX values including divestment')
+            # note that the divestment_value should not be escalated
             print('CAPEX years escalated: {}'.format(capex_years))
             print('CAPEX values escalated: {}'.format(capex_values))
 
         # --------------------------------------------------------------------------------------------------------------
+
         if debug:
             print('')
-            print('*** add Opex values + decommissioning ****')
-            print('')
-            print('investment_years: {}'.format(investment_years))
+            print('*** determine opex_years and opex_values (including decommissioning) ****')
             print('')
 
-        for investment_year in investment_years:
-            # determine the summed_escalated_capex from each investment_year + construction_duration
-            if insufficient_reinvestment_time and investment_year == investment_years[-1]:
-                if debug:
-                    print('keep summed_escalated_capex of last period (due to insufficient reinvestment time)')
-            else:
-                bools = [item >= investment_year and item <= investment_year + self.construction_duration for item in capex_years]
-                summed_escalated_capex = sum(a for a, b in zip(capex_values, bools) if b)
+        # for each investment year
+        for index, investment_year in enumerate(self.investment_years):
+            # determine opex value
+            opex_value = self.summed_escalated_capex[index] * (self.yearly_variable_costs_rate + self.insurance_rate)
 
-            if not investment_year == investment_years[-1]:
-                # use the sum of the escalated CAPEX values as OPEX value
-                opex_value = summed_escalated_capex * (self.yearly_variable_costs_rate + self.insurance_rate)
-                if debug:
-                    print('initial investment range start {} stop {}'.format(
-                        investment_year + self.construction_duration,
-                        min([investment_year + self.construction_duration + self.economic_lifetime,
-                             self.escalation_base_year + lifecycle] )))
-                    print('opex_value {:.2f}, based on a summed_escalated_capex of {:.2f} '.format(
-                        opex_value,
-                        summed_escalated_capex))
-                    print('decommissioning cost of {:.2f} added in {}, based on a summed_escalated_capex of {:.2f} '.format(
-                        summed_escalated_capex * self.decommissioning_rate,
-                        min([investment_year + self.construction_duration + self.economic_lifetime,
-                             self.escalation_base_year + lifecycle] ), summed_escalated_capex))
-
-                opex_years_inv_cycle = list(range(
+            if debug:
+                print('investment range start {} stop {}'.format(
                     investment_year + self.construction_duration,
                     min([investment_year + self.construction_duration + self.economic_lifetime,
-                         self.escalation_base_year + lifecycle] )))
-                opex_values_inv_cycle = [opex_value] * len(opex_years_inv_cycle)
-                opex_values_inv_cycle[-1] = opex_values_inv_cycle[-1] + summed_escalated_capex * self.decommissioning_rate
+                         self.escalation_base_year + lifecycle]) - 1))
+                print('opex_value {:.2f}, based on a summed_escalated_capex of {:.2f} '.format(
+                    opex_value,
+                    self.summed_escalated_capex[index]))
+                print('decommissioning cost of {:.2f} added in {}, based on a summed_escalated_capex of {:.2f} '.format(
+                    self.summed_escalated_capex[index] * self.decommissioning_rate,
+                    min([investment_year + self.construction_duration + self.economic_lifetime - 1,
+                         self.escalation_base_year + lifecycle - 1]), self.summed_escalated_capex[index]))
+                print('')
 
-            else:
-                if not insufficient_reinvestment_time:
-                    # use the sum of the escalated CAPEX values as OPEX value
-                    opex_value = summed_escalated_capex * \
-                                 (self.yearly_variable_costs_rate + self.insurance_rate)
-                    if debug:
-                        print('')
-                        print('reinvestment range start {} stop {}'.format(
-                            investment_year + self.construction_duration,
-                            self.escalation_base_year + lifecycle))
-                        print('opex_value {:.2f}, based on a summed_escalated_capex of {:.2f} '.format(
-                            opex_value,
-                            summed_escalated_capex))
-                        print('decommissioning cost of {:.2f} added in {}, based on a summed_escalated_capex of {:.2f} '.format(
-                            summed_escalated_capex * self.decommissioning_rate,
-                            self.escalation_base_year + lifecycle, summed_escalated_capex))
+            # determine opex values for investment cycle
+            opex_years_inv_cycle = list(range(
+                investment_year + self.construction_duration,
+                min([investment_year + self.construction_duration + self.economic_lifetime,
+                     self.escalation_base_year + lifecycle])))
+            opex_values_inv_cycle = [opex_value] * len(opex_years_inv_cycle)
 
-                    opex_years_inv_cycle = list(range(
-                        investment_year + self.construction_duration,
-                        min([investment_year + self.construction_duration + self.economic_lifetime,
-                             self.escalation_base_year + lifecycle])))
-                    opex_values_inv_cycle = [opex_value] * len(opex_years_inv_cycle)
-                    opex_values_inv_cycle[-1] = opex_values_inv_cycle[-1] + summed_escalated_capex * self.decommissioning_rate
+            # add decommissioning value to the last field of the opex cycle
+            opex_values_inv_cycle[-1] = opex_values_inv_cycle[-1] + self.summed_escalated_capex[
+                index] * self.decommissioning_rate
 
-                    # # store escalated decommissioning value to object for convenience
-                    # self.decommissioning_year = decommissioning_year
-                    # self.decommissioning_value = decommissioning_value * escalation_list[
-                    # [index for index, escalation_year in enumerate(escalation_years) if                      escalation_year == decommissioning_year][0]]
+            self.decommissioning_years.append(min([investment_year + self.construction_duration + self.economic_lifetime - 1,
+                         self.escalation_base_year + lifecycle - 1]))
+            self.decommissioning_values.append(self.summed_escalated_capex[index] * self.decommissioning_rate)
 
-                else:
-                    opex_years_inv_cycle = []
-                    opex_values_inv_cycle = []
+            # todo: check what will happen if there is insufficient investment time
 
-            if opex_years_inv_cycle:
-                opex_years  = opex_years + opex_years_inv_cycle
-                opex_values = opex_values + opex_values_inv_cycle
-
-        # # add decommissioning before escalation
-        # # we calculate the decommissioning value because its convenient, it is added in the Opex section
-        # decommissioning_year = year - 1
-        # decommissioning_value = summed_escalated_capex * self.decommissioning_rate
-        #
-        # if decommissioning_year in opex_years:
-        #     value_index = [index for index, opex_year in enumerate(opex_years) if decommissioning_year == opex_year][0]
-        #     opex_values[value_index] = opex_values[value_index] + decommissioning_value
-        # else:
-        #     opex_years.append(decommissioning_year)
-        #     opex_values.append(decommissioning_value)
-
-        # # store escalated decommissioning value to object for convenience
-        # self.decommissioning_year = decommissioning_year
-        # self.decommissioning_value = decommissioning_value * escalation_list[
-        #         [index for index, escalation_year in enumerate(escalation_years) if escalation_year == decommissioning_year][0]]
-        #
-        # if debug:
-        #     print('')
-        #     print('decommmissioning in {}'.format(decommissioning_year))
-        #     print('escalated decommmissioning value is {:.2f}, based on a summed_escalated_capex of {:.2f}'.format(
-        #         decommissioning_value, summed_escalated_capex))
-
-        if debug:
-            print('')
-            print('opex values, including non-escalated decommissioning')
-            print('OPEX years: {}'.format(opex_years))
-            print('OPEX values: {}'.format(opex_values))
+            # add these opex values to the overall list
+            opex_years = opex_years + opex_years_inv_cycle
+            opex_values = opex_values + opex_values_inv_cycle
 
         # escalate the OPEX using the list of escalation factors
-        for i, opex_year in enumerate(opex_years):
-            opex_values[i] = opex_values[i] * escalation_list[
-                [index for index, escalation_year in enumerate(escalation_years) if escalation_year == opex_year][0]]
+        opex_values = escalate_list(opex_years, opex_values)
 
         if debug:
-            print('')
-            print('escalated opex values, including decommissioning')
             print('OPEX years escalated: {}'.format(opex_years))
             print('OPEX values escalated: {}'.format(opex_values))
 
         # --------------------------------------------------------------------------------------------------------------
-
-        # initialise revenue values (to store residual value)
-        revenue_years = []
-        revenue_values = []
 
         # escalate the revenues using the list of escalation factors
         for i, revenue_year in enumerate(revenue_years):
             revenue_values[i] = revenue_values[i] * escalation_list[
                 [index for index, escalation_year in enumerate(escalation_years) if escalation_year == revenue_year][0]]
 
+        # --------------------------------------------------------------------------------------------------------------
+
         self.df = create_cashflow_dataframe(escalation_base_year=self.escalation_base_year,
-                                       lifecycle=lifecycle,
-                                       capex={'years': capex_years,
-                                              'values': capex_values},
-                                       opex={'years': opex_years,
-                                             'values': opex_values},
-                                       revenue={'years': revenue_years,
-                                                'values': revenue_values})
+                                            lifecycle=lifecycle,
+                                            capex={'years': capex_years,
+                                                   'values': capex_values},
+                                            opex={'years': opex_years,
+                                                  'values': opex_values},
+                                            revenue={'years': revenue_years,
+                                                     'values': revenue_values})
 
 
 Object = type('Object', (
