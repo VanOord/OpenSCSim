@@ -228,30 +228,35 @@ class CashflowProperties(object):
         # 5. add divestment (no escalation)
         for index, investment_year in enumerate(self.investment_years):
             # divestment_year
-            # both values could have a -1
             divestment_year = min([investment_year + self.construction_duration + self.economic_lifetime - 1,
                                    self.escalation_base_year + lifecycle - 1])
 
             # divestment_value
+            # if the economic life ends before the total project lifecycle ...
             if investment_year + self.construction_duration + self.economic_lifetime < self.escalation_base_year + lifecycle:
+                # diminish the summed_escalated_capex with number of years times to lifetime end, times the depreciation (should typically be zero)
                 divestment_value = -1 * (self.summed_escalated_capex[index] -
                                          self.summed_escalated_capex[index] * self.depreciation_rate * (
                                              (self.investment_years[index] + self.construction_duration + self.economic_lifetime - 1) -
                                              (self.investment_years[index] + self.construction_duration - 1)))
             else:
+                # diminish the summed_escalated_capex with number of years to lifecycle end, times the depreciation
                 divestment_value = -1 * (self.summed_escalated_capex[index] -
                                          self.summed_escalated_capex[index] * self.depreciation_rate * (
                                              (self.escalation_base_year + lifecycle - 1) -
                                              (self.investment_years[index] + self.construction_duration - 1)))
 
-            # add to capex_values
+            # add to capex_values ...
             if divestment_year in capex_years:
+                # ... if divestment_year is already in capex_years add the value to the existing value ...
                 value_index = [index for index, capex_year in enumerate(capex_years) if divestment_year == capex_year][0]
                 capex_values[value_index] = capex_values[value_index] + divestment_value
             else:
+                # ... otherwise append the year and value as new entries to the capex lists
                 capex_years.append(divestment_year)
                 capex_values.append(divestment_value)
 
+            # save info to object, for later inspection
             self.divestment_years.append(divestment_year)
             self.divestment_values.append(divestment_value)
 
@@ -267,16 +272,15 @@ class CashflowProperties(object):
 
         # --------------------------------------------------------------------------------------------------------------
 
-        # 6. add Opex values
-
         if debug:
             print('')
             print('*** determine opex_years and opex_values (including decommissioning) ****')
             print('')
 
-        # for each investment year
+        # 6. add Opex values
+        # for each investment_year ...
         for index, investment_year in enumerate(self.investment_years):
-            # determine opex value
+            # ... determine opex_value
             opex_value = self.summed_escalated_capex[index] * (self.yearly_variable_costs_rate + self.insurance_rate)
 
             if debug:
@@ -293,22 +297,23 @@ class CashflowProperties(object):
                          self.escalation_base_year + lifecycle - 1]), self.summed_escalated_capex[index]))
                 print('')
 
-            # determine opex values for investment cycle
+            # ... and, determine the investment cycle time interval and add the opex_value to that interval
             opex_years_inv_cycle = list(range(
                 investment_year + self.construction_duration,
                 min([investment_year + self.construction_duration + self.economic_lifetime,
                      self.escalation_base_year + lifecycle])))
             opex_values_inv_cycle = [opex_value] * len(opex_years_inv_cycle)
 
-            # add decommissioning value to the last field of the opex cycle
+            # ... and, add the decommissioning value to the last field of the investment cycle time interval
             opex_values_inv_cycle[-1] = opex_values_inv_cycle[-1] + self.summed_escalated_capex[
                 index] * self.decommissioning_rate
 
+            # save info to object, for later inspection
             self.decommissioning_years.append(min([investment_year + self.construction_duration + self.economic_lifetime - 1,
                          self.escalation_base_year + lifecycle - 1]))
             self.decommissioning_values.append(self.summed_escalated_capex[index] * self.decommissioning_rate)
 
-            # add these opex values to the overall list
+            # ... add these opex_values for the investment cycle time interval to the overall opex list (years and values)
             opex_years = opex_years + opex_years_inv_cycle
             opex_values = opex_values + opex_values_inv_cycle
 
@@ -322,6 +327,7 @@ class CashflowProperties(object):
         # --------------------------------------------------------------------------------------------------------------
 
         # 8. escalate the revenues using the list of escalation factors
+        # revenue_years and revenue_values are for now still empty lists
         for i, revenue_year in enumerate(revenue_years):
             revenue_values[i] = revenue_values[i] * escalation_list[
                 [index for index, escalation_year in enumerate(escalation_years) if escalation_year == revenue_year][0]]
@@ -329,6 +335,7 @@ class CashflowProperties(object):
         # --------------------------------------------------------------------------------------------------------------
 
         # 9. create dataframe with cashflows
+        # use the _years and _values lists completed above to create a dataframe and add it to the object for later use
         self.df = create_cashflow_dataframe(escalation_base_year=self.escalation_base_year,
                                             lifecycle=lifecycle,
                                             capex={'years': capex_years,
