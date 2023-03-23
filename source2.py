@@ -549,12 +549,11 @@ def create_npv_plot(df, title=r'CAPEX, OPEX and Revenues and NPV', fname=r'test.
     ax1.grid(which='major', axis='both')
     ax1.set_xlim([df.years.min() - 1, df.years.max() + 1])
     ax1.set_ylim(cash_flow_lims)
-
     # ----
 
     ax2 = ax1.twinx()  # instantiate a second axes that shares the same x-axis
 
-    ax2.plot(list(df['years']), list(df['npv_sum'] / 10 ** 6), color='red', marker='o', label='NPV')
+    ax2.plot(list(df['years']), list(df['cashflow_sum'] / 10 ** 6), color='red', marker='o', label='Cumulative cashflows (Capex, Opex, Revenues)')
 
     ax2.legend(loc='lower right', fontsize=fontsize_legend, bbox_to_anchor=(x2 + 1, y2), frameon=False)
 
@@ -563,6 +562,14 @@ def create_npv_plot(df, title=r'CAPEX, OPEX and Revenues and NPV', fname=r'test.
     ax2.set_ylim(npv_lims)  # NB: you want to take care that the y=0 of ax1 and ax2 align to avoid confusion
 
     # ----
+    
+    # add a marker in the final year representing the cumulated NPV value
+    final_year = df['years'].iloc[-1]
+    final_npv = df['npv_sum'].iloc[-1]
+    ax2.scatter(final_year, final_npv / 10 ** 6, color='purple', s=500, marker='x', label='Cumulative NPV in final year')
+    ax2.legend(loc='lower right', fontsize=fontsize_legend, bbox_to_anchor=(x2 + 1, y2), frameon=False)
+    
+    fig.tight_layout()
 
     fig.tight_layout = True
 
