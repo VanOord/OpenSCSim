@@ -422,7 +422,8 @@ def combine_cashflow_dataframes(dfs):
 
     Finally we return the combined dataframe.
 
-    Todo: see if it is useful to also add a base year, so that you can calculate npvs to a give baseyear
+    Todo: see if it is useful to also add a base year, so that you can calculate 
+    s to a give baseyear
     """
 
     # assert all dataframes contain the required fields
@@ -481,7 +482,7 @@ def calculate_npv(df, escalation_base_year, WACC=0.07):
 
     # calculate the npv through the years from the 2nd year up to the end and add the values to the 'npv' column
     for year in df.years.tolist()[:]:
-        df.loc[year, 'npv'] = df['cashflow'].loc[year] * (1 / ((1 + WACC) ** (year - escalation_base_year + 1)))
+        df.loc[year, 'npv'] = df['cashflow'].loc[year] * (1 / ((1 + WACC) ** (year - escalation_base_year)))
 
     # add the cumsum of npvs to the 'npv_sum' column
     df['npv_sum'] = df['npv'].cumsum()
