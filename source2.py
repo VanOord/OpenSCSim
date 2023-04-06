@@ -10,7 +10,7 @@ turbine_data={
     'sub_system': 'Wind energy source & Transport',
     'element': 'Offshore wind park',
     'component': 'Turbine',
-    'escalation_base_year': 2023,
+    'escalation_base_year': 2030,
     'escalation_rate': 0.02,
     'capex_per_unit': 1_495_000,
     'capex_per_unit_units': 'EUR/MW',
@@ -32,7 +32,7 @@ foundation_data={
     'sub_system': 'Wind energy source & Transport',
     'element': 'Offshore wind park',
     'component': 'Foundation & cable',
-    'escalation_base_year': 2023,
+    'escalation_base_year': 2030,
     'escalation_rate': 0.02,
     'capex_per_unit': 2_691_000,
     'capex_per_unit_units': 'EUR/MW',
@@ -106,7 +106,7 @@ class CashflowProperties(object):
         self.decommissioning_values = []
 
     def generate_cashflows(self,
-                           startyear: int = 2023,
+                           startyear: int = 2030,
                            lifecycle: int = 11,
                            debug: bool = False):
         """
@@ -366,7 +366,7 @@ def test_dataframe(df):
     assert 'opex' in df.columns, f"expected column 'opex' not found"
     assert 'revenue' in df.columns, f"expected column 'revenue' not found"
 
-def create_cashflow_dataframe(escalation_base_year=2023, lifecycle=50,
+def create_cashflow_dataframe(escalation_base_year=2030, lifecycle=50,
                               capex={'years': [2001, 2002],
                                      'values': [-5_000_000, -5_000_000]},
                               opex={'years': list(range(2003, 2011)),
